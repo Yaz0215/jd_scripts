@@ -1,10 +1,9 @@
 /**
  * 京东-下拉
- * cron: 15 1,15,22 * * *
+ * cron: 15 8,20 * * *
  */
 
-import axios from 'axios'
-import {sendNotify} from './sendNotify'
+import axios from 'axios';
 import {requireConfig, wait, o2s, getshareCodeHW} from './TS_USER_AGENTS'
 
 interface ShareCode {
@@ -25,8 +24,13 @@ let cookie: string = '', UserName: string = '', res: any = '', message: string =
     UserName = decodeURIComponent(cookie.match(/pt_pin=([^;]*)/)![1])
     console.log(`\n开始【京东账号${index + 1}】${UserName}\n`)
 
-    res = await api('superBrandSecondFloorMainPage', {"source": "secondfloor"})
-    activityId = res.data.result.activityBaseInfo.activityId
+    res = await api('showSecondFloorCardInfo', {"source": "secondfloor"})
+    try {
+      activityId = res.data.result.activityBaseInfo.activityId
+    } catch (e) {
+      console.log('黑号')
+      continue
+    }
     let encryptProjectId: string = res.data.result.activityBaseInfo.encryptProjectId
     await wait(1000)
 
@@ -47,17 +51,16 @@ let cookie: string = '', UserName: string = '', res: any = '', message: string =
         }
 
         // 下拉
-        // if (t.ext?.sign2) {
-        //   try {
-        //     if (new Date().getHours() >= 14 && new Date().getHours() <= 20) {
-        //       res = await api('superBrandDoTask', {"source": "secondfloor", "activityId": activityId, "encryptProjectId": encryptProjectId, "encryptAssignmentId": t.encryptAssignmentId, "assignmentType": t.assignmentType, "itemId": t.ext.sign2[0].itemId, "actionType": 0})
-        //       console.log(res.data?.bizMsg)
-        //       await wait(2000)
-        //     }
-        //   } catch (e) {
-        //     console.log(t.ext?.sign2)
-        //   }
-        // }
+        if (t.ext?.sign2) {
+          if (t.ext.currentSectionStatus !== 1) {
+            res = await api('superBrandDoTask', {"source": "secondfloor", "activityId": activityId, "encryptProjectId": encryptProjectId, "encryptAssignmentId": t.encryptAssignmentId, "assignmentType": t.assignmentType, "itemId": t.ext.currentSectionItemId, "actionType": 0})
+            console.log(res.data?.bizMsg)
+            await wait(2000)
+            console.log('下拉任务', t.ext?.sign2)
+          } else {
+            console.log('下拉任务 已经完成')
+          }
+        }
       }
 
       // 助力码
@@ -74,7 +77,7 @@ let cookie: string = '', UserName: string = '', res: any = '', message: string =
     }
 
     // 抽奖
-    if (new Date().getHours() === 23) {
+    if (new Date().getHours() === 20) {
       let sum: number = 0
       res = await api('superBrandSecondFloorMainPage', {"source": "secondfloor"})
       let userStarNum: number = res.data.result.activityUserInfo.userStarNum
@@ -84,17 +87,17 @@ let cookie: string = '', UserName: string = '', res: any = '', message: string =
         if (res.data.result?.rewardComponent?.beanList?.length) {
           console.log('抽奖获得京豆：', res.data.result.rewardComponent.beanList[0].quantity)
           sum += res.data.result.rewardComponent.beanList[0].quantity
+        } else {
+          console.log('没抽到？', JSON.stringify(res))
         }
         await wait(2000)
       }
       message += `【京东账号${index + 1}】${UserName}\n抽奖${userStarNum}次，获得京豆${sum}\n\n`
     }
+
+    await wait(2000)
   }
-  // await sendNotify('京东-下拉', message)
-
   console.log(shareCodesSelf)
-  await wait(3000)
-
   shareCodesHW = await getshareCodeHW('tewu')
   shareCodes = [...shareCodesSelf, ...shareCodesHW]
   let full: string[] = []
@@ -102,6 +105,10 @@ let cookie: string = '', UserName: string = '', res: any = '', message: string =
     cookie = value
     res = await api('superBrandTaskList', {"source": "secondfloor", "activityId": activityId, "assistInfoFlag": 1})
     let mine: string = ''
+    if (!res.data.result?.taskList) {
+      console.log('黑号')
+      continue
+    }
     for (let t of res.data.result.taskList) {
       if (t.ext?.assistTaskDetail) {
         mine = t.ext.assistTaskDetail.itemId
@@ -126,8 +133,6 @@ let cookie: string = '', UserName: string = '', res: any = '', message: string =
           console.log('其他错误', res.data.bizMsg)
         }
         await wait(2000)
-      } else {
-        console.log('助力满了，跳过')
       }
     }
   }
